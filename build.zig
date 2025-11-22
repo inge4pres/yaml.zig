@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
         "test/api_test.zig",
         "test/spec_examples.zig",
         "test/text_inputs.zig",
+        "test/stringify_test.zig",
     };
 
     for (test_files) |test_file| {

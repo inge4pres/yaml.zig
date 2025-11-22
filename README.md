@@ -4,19 +4,20 @@ A YAML 1.2.2 parser and serializer for Zig, designed following the patterns of t
 
 ## Status
 
-**✅ Parser Complete - Production Ready for Reading YAML**
+**✅ Parser & Serializer Complete - Production Ready**
 
-The YAML parser is fully functional and passes all tests. Serialization (writing YAML) is not yet implemented.
+The YAML parser and serializer are both fully functional and pass all tests. You can both read and write YAML files.
 
-**Test Coverage:** 86/86 tests passing (100%) - Zero memory leaks
+**Test Coverage:** 102/102 tests passing (100%) - Zero memory leaks
 
 ### Test Breakdown:
 - scanner_test.zig: 15 passed
 - value_test.zig: 9 passed
 - parser_test.zig: 11 passed
-- api_test.zig: 12 passed ✨ *New comprehensive API tests*
+- api_test.zig: 12 passed
 - spec_examples.zig: 4 passed
-- text_inputs.zig: 13 passed ✨ *New real-world YAML tests*
+- text_inputs.zig: 13 passed
+- stringify_test.zig: 16 passed ✨ *Serialization tests with Writer API*
 - yaml-test: 22 passed
 
 ## Features
@@ -36,11 +37,14 @@ The YAML parser is fully functional and passes all tests. Serialization (writing
 - ✅ **Number Formats** - Decimal, octal (`0o`), hexadecimal (`0x`), floats, `.inf`, `.nan`
 - ✅ **Memory Safety** - Zero memory leaks, proper allocator usage
 
+### Recently Added ✨
+- ✅ **Serialization (stringify)** - Writing YAML from values
+- ✅ **File I/O Helpers** - `parseFromFile()` and `serializeToFile()` convenience functions
+- ✅ **Writer API Support** - `serializeToWriter()` and `serializeToWriterWithOptions()` for Zig 0.15.2 `std.Io.Writer`
+
 ### Not Yet Implemented
 
-- ❌ **Serialization (stringify)** - Writing YAML from values
 - ❌ **Comptime Struct Mapping** - Parse directly into Zig structs using `@typeInfo()`
-- ❌ **File I/O Helpers** - Convenience functions for loading/saving files
 - ❌ **Multi-document Streams** - Multiple YAML documents in one file
 - ❌ **Custom Tags** - Application-specific tag handlers
 
@@ -128,6 +132,55 @@ if (value.asMapping()) |map| {
 }
 ```
 
+### Serialization (Writing YAML)
+
+```zig
+const std = @import("std");
+const yaml = @import("yaml");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    // Create a mapping
+    var map = yaml.Value.Mapping.init(allocator);
+    defer map.deinit();
+
+    const name_key = try allocator.dupe(u8, "name");
+    const name_val = try allocator.dupe(u8, "Bob");
+    try map.put(name_key, yaml.Value{ .string = name_val });
+
+    const age_key = try allocator.dupe(u8, "age");
+    try map.put(age_key, yaml.Value{ .int = 25 });
+
+    var value = yaml.Value{ .mapping = map };
+
+    // Serialize to stdout
+    try yaml.stringify(value, std.io.getStdOut().writer());
+
+    // Or serialize to file
+    try yaml.serializeToFile(value, "output.yaml");
+
+    // Or use the std.Io.Writer interface (Zig 0.15.2+)
+    var w = std.Io.Writer.Allocating.init(allocator);
+    defer w.deinit();
+    try yaml.serializeToWriter(value, &w.writer);
+    const yaml_string = w.written();
+}
+```
+
+### File I/O
+
+```zig
+// Parse from file
+var parsed = try yaml.parseFromFile(allocator, "config.yaml");
+defer parsed.deinit();
+
+// Serialize to file
+try yaml.serializeToFile(parsed.value, "output.yaml");
+```
+
 ### YAML Syntax Examples
 
 ```yaml
@@ -211,14 +264,15 @@ yaml.zig/
 │   ├── parser.zig     # Parsing layer
 │   ├── value.zig      # Value type definition
 │   ├── schema.zig     # Tag resolution
-│   └── stringify.zig  # Serialization (stub)
+│   └── stringify.zig  # Serialization implementation
 └── test/
     ├── scanner_test.zig   # Tokenizer tests (15 tests)
     ├── parser_test.zig    # Parser tests (11 tests)
     ├── value_test.zig     # Value type tests (9 tests)
     ├── api_test.zig       # High-level API tests (12 tests)
     ├── spec_examples.zig  # YAML spec examples (4 tests)
-    └── text_inputs.zig    # Real-world YAML tests (13 tests)
+    ├── text_inputs.zig    # Real-world YAML tests (13 tests)
+    └── stringify_test.zig # Serialization tests (14 tests)
 ```
 
 ## Roadmap
@@ -233,16 +287,21 @@ yaml.zig/
 - [x] Fix flow syntax parsing
 - [x] Fix scanner memory leaks
 - [x] Fix token pushback for proper parsing
-- [ ] Add comprehensive error messages (deferred to Phase 3)
 
-### Phase 3: Serialization (Next Priority)
-- [ ] Implement `stringify()` for Value → YAML serialization
+### Phase 3: Serialization ✅ (Complete)
+- [x] Implement `stringify()` for Value → YAML serialization
+- [x] File I/O helpers (`parseFromFile`, `serializeToFile`)
+- [x] Writer API support (`serializeToWriter`, `serializeToWriterWithOptions`)
+- [x] Comprehensive stringify tests (16 tests)
+- [x] Roundtrip parse-stringify verification
+- [x] Zig 0.15.2 `std.Io.Writer` compatibility
+
+### Phase 4: Advanced Features (Next Priority)
 - [ ] Add comprehensive error messages with line/column info
-- [ ] File I/O helpers (`parseFromFile`, `serializeToFile`)
 - [ ] Multi-document stream support
 - [ ] Custom tag handlers
 
-### Phase 4: Advanced Features (Planned)
+### Phase 5: Production Enhancements (Planned)
 - [ ] Comptime struct mapping with `@typeInfo()`
 - [ ] Performance optimization
 - [ ] Full YAML 1.2.2 test suite compliance
