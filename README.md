@@ -54,13 +54,8 @@ The YAML parser and serializer are both fully functional and pass all tests. You
 
 Add to your `build.zig.zon`:
 
-```zig
-.dependencies = .{
-    .yaml = .{
-        .url = "https://github.com/inge4pres/yaml.zig/archive/<commit>.tar.gz",
-        .hash = "<hash>",
-    },
-},
+```bash
+zig fetch --save "git+https://github.com/inge4pres/yaml.zig#v0.1.0"
 ```
 
 In your `build.zig`:
@@ -71,7 +66,14 @@ const yaml = b.dependency("yaml", .{
     .optimize = optimize,
 });
 
-exe.root_module.addImport("yaml", yaml.module("yaml"));
+const app_moule = b.createModule(.{
+  ...
+  .imports = &.{
+      .{ .name = "yaml", .module = yaml },
+  },
+  ...
+})
+
 ```
 
 ## Usage
@@ -245,13 +247,7 @@ zig build
 ### Running Tests
 
 ```bash
-# Run all tests
 zig build test
-
-# Run specific test file
-zig test src/scanner.zig
-zig test src/parser.zig
-zig test src/value.zig
 ```
 
 ### Project Structure
