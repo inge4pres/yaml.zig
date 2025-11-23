@@ -220,6 +220,9 @@ pub const Parser = struct {
         var val = Value.initMapping(self.allocator);
         var map = val.asMapping().?;
 
+        // Track the indentation level of this mapping
+        const mapping_indent = first_key.indent;
+
         // First key-value pair
         const first_key_str = try self.allocator.dupe(u8, first_key.value);
 
@@ -253,7 +256,15 @@ pub const Parser = struct {
                 break;
             }
 
-            const key_str = try self.allocator.dupe(u8, key_token.?.scalar.value);
+            // Check if this key is at the same indentation level as the mapping
+            const key_scalar = key_token.?.scalar;
+            if (key_scalar.indent < mapping_indent) {
+                // This key is at a shallower indentation - we've left this mapping
+                self.peeked_token = key_token;
+                break;
+            }
+
+            const key_str = try self.allocator.dupe(u8, key_scalar.value);
 
             // Check for value indicator
             const val_indicator = try self.nextToken();

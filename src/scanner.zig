@@ -32,6 +32,7 @@ pub const Token = union(enum) {
     pub const Scalar = struct {
         value: []const u8,
         style: Style,
+        indent: usize, // Column where this scalar starts (0-based)
 
         pub const Style = enum {
             plain,
@@ -103,6 +104,7 @@ pub const Scanner = struct {
 
     fn scanNext(self: *Scanner) !Token {
         const c = self.input[self.pos];
+        const token_indent = self.column - 1; // Capture indent (0-based)
 
         // Flow indicators
         if (self.flow_level > 0 or c == '[' or c == '{') {
@@ -185,31 +187,31 @@ pub const Scanner = struct {
                 return .{ .tag = try self.scanTag() };
             },
             '\'' => {
-                return .{ .scalar = try self.scanSingleQuoted() };
+                return .{ .scalar = try self.scanSingleQuoted(token_indent) };
             },
             '"' => {
-                return .{ .scalar = try self.scanDoubleQuoted() };
+                return .{ .scalar = try self.scanDoubleQuoted(token_indent) };
             },
             '|' => {
                 if (self.isWhitespaceOrEnd(self.pos + 1)) {
                     self.advance();
-                    return .{ .scalar = try self.scanLiteral() };
+                    return .{ .scalar = try self.scanLiteral(token_indent) };
                 }
             },
             '>' => {
                 if (self.isWhitespaceOrEnd(self.pos + 1)) {
                     self.advance();
-                    return .{ .scalar = try self.scanFolded() };
+                    return .{ .scalar = try self.scanFolded(token_indent) };
                 }
             },
             else => {},
         }
 
         // Default to plain scalar
-        return .{ .scalar = try self.scanPlain() };
+        return .{ .scalar = try self.scanPlain(token_indent) };
     }
 
-    fn scanPlain(self: *Scanner) !Token.Scalar {
+    fn scanPlain(self: *Scanner, indent: usize) !Token.Scalar {
         const start = self.pos;
 
         while (self.pos < self.input.len) {
@@ -245,10 +247,11 @@ pub const Scanner = struct {
         return .{
             .value = value,
             .style = .plain,
+            .indent = indent,
         };
     }
 
-    fn scanSingleQuoted(self: *Scanner) !Token.Scalar {
+    fn scanSingleQuoted(self: *Scanner, indent: usize) !Token.Scalar {
         self.advance(); // Skip opening '
         var buf = std.ArrayList(u8){};
         defer buf.deinit(self.allocator);
@@ -276,10 +279,11 @@ pub const Scanner = struct {
         return .{
             .value = value,
             .style = .single_quoted,
+            .indent = indent,
         };
     }
 
-    fn scanDoubleQuoted(self: *Scanner) !Token.Scalar {
+    fn scanDoubleQuoted(self: *Scanner, indent: usize) !Token.Scalar {
         self.advance(); // Skip opening "
         var buf = std.ArrayList(u8){};
         defer buf.deinit(self.allocator);
@@ -318,10 +322,11 @@ pub const Scanner = struct {
         return .{
             .value = value,
             .style = .double_quoted,
+            .indent = indent,
         };
     }
 
-    fn scanLiteral(self: *Scanner) !Token.Scalar {
+    fn scanLiteral(self: *Scanner, token_indent: usize) !Token.Scalar {
         self.skipWhitespaceOnLine();
         if (self.pos < self.input.len and self.input[self.pos] == '\n') {
             self.advance();
@@ -351,10 +356,11 @@ pub const Scanner = struct {
         return .{
             .value = value,
             .style = .literal,
+            .indent = token_indent,
         };
     }
 
-    fn scanFolded(self: *Scanner) !Token.Scalar {
+    fn scanFolded(self: *Scanner, token_indent: usize) !Token.Scalar {
         // Similar to literal but folds single newlines
         self.skipWhitespaceOnLine();
         if (self.pos < self.input.len and self.input[self.pos] == '\n') {
@@ -403,6 +409,7 @@ pub const Scanner = struct {
         return .{
             .value = value,
             .style = .folded,
+            .indent = token_indent,
         };
     }
 

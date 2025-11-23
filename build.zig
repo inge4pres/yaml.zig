@@ -39,6 +39,9 @@ pub fn build(b: *std.Build) void {
         "test/spec_examples.zig",
         "test/text_inputs.zig",
         "test/stringify_test.zig",
+        "test/simple_indent_test.zig",
+        "test/debug_test.zig",
+        "test/kubeconfig_test.zig",
     };
 
     for (test_files) |test_file| {
