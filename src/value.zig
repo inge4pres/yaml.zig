@@ -113,6 +113,36 @@ pub const Value = union(enum) {
         return .{ .mapping = Mapping.init(allocator) };
     }
 
+    /// Deep copy a Value, recursively copying all nested structures
+    pub fn deepCopy(self: Value, allocator: Allocator) !Value {
+        return switch (self) {
+            .null => .{ .null = {} },
+            .bool => |b| .{ .bool = b },
+            .int => |i| .{ .int = i },
+            .float => |f| .{ .float = f },
+            .string => |s| .{ .string = try allocator.dupe(u8, s) },
+            .sequence => |seq| {
+                var new_seq = Sequence{};
+                try new_seq.ensureTotalCapacity(allocator, seq.items.len);
+                for (seq.items) |item| {
+                    try new_seq.append(allocator, try item.deepCopy(allocator));
+                }
+                return .{ .sequence = new_seq };
+            },
+            .mapping => |map| {
+                var new_map = Mapping.init(allocator);
+                try new_map.ensureTotalCapacity(map.count());
+                var iter = map.iterator();
+                while (iter.next()) |entry| {
+                    const key_copy = try allocator.dupe(u8, entry.key_ptr.*);
+                    const value_copy = try entry.value_ptr.deepCopy(allocator);
+                    try new_map.put(key_copy, value_copy);
+                }
+                return .{ .mapping = new_map };
+            },
+        };
+    }
+
     // Format for debugging
     pub fn format(
         self: Value,

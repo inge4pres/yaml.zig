@@ -25,6 +25,7 @@ pub fn main() !void {
     var results = std.ArrayList(TestResult){};
     defer {
         for (results.items) |result| {
+            allocator.free(result.name);
             if (result.error_msg) |msg| {
                 allocator.free(msg);
             }
@@ -66,7 +67,7 @@ fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: [
     var test_dir = suite_dir.openDir(test_id, .{ .iterate = true }) catch |err| {
         const error_msg = try std.fmt.allocPrint(allocator, "Failed to open test directory: {}", .{err});
         try results.append(allocator, .{
-            .name = test_id,
+            .name = try allocator.dupe(u8, test_id),
             .passed = false,
             .error_msg = error_msg,
         });
@@ -83,7 +84,6 @@ fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: [
         while (try subdir_iter.next()) |entry| {
             if (entry.kind != .directory) continue;
             const subtest_id = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ test_id, entry.name });
-            defer allocator.free(subtest_id);
             try runSubTest(allocator, test_dir, entry.name, subtest_id, results);
         }
         return;
@@ -91,7 +91,8 @@ fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: [
 
     // Single test case
     std.debug.print("Testing: {s}... ", .{test_id});
-    try runTestCase(allocator, test_dir, test_id, results);
+    const owned_test_id = try allocator.dupe(u8, test_id);
+    try runTestCase(allocator, test_dir, owned_test_id, results);
 }
 
 fn runSubTest(allocator: std.mem.Allocator, parent_dir: std.fs.Dir, subdir_name: []const u8, full_test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
@@ -100,7 +101,7 @@ fn runSubTest(allocator: std.mem.Allocator, parent_dir: std.fs.Dir, subdir_name:
     var test_dir = parent_dir.openDir(subdir_name, .{}) catch |err| {
         const error_msg = try std.fmt.allocPrint(allocator, "Failed to open subtest directory: {}", .{err});
         try results.append(allocator, .{
-            .name = full_test_id,
+            .name = try allocator.dupe(u8, full_test_id),
             .passed = false,
             .error_msg = error_msg,
         });
@@ -109,6 +110,7 @@ fn runSubTest(allocator: std.mem.Allocator, parent_dir: std.fs.Dir, subdir_name:
     };
     defer test_dir.close();
 
+    // full_test_id is already allocated by the caller, pass it directly
     try runTestCase(allocator, test_dir, full_test_id, results);
 }
 

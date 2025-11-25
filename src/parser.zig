@@ -353,7 +353,8 @@ pub const Parser = struct {
 
     fn resolveAlias(self: *Parser, alias: []const u8) !Value {
         if (self.anchors.get(alias)) |value| {
-            return value;
+            // Return a deep copy to avoid double-free when cleaning up
+            return try value.deepCopy(self.allocator);
         }
         return ParseError.UnknownAlias;
     }
