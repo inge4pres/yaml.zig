@@ -8,17 +8,15 @@ A YAML 1.2.2 parser and serializer for Zig, designed following the patterns of t
 
 The YAML parser and serializer are both fully functional and pass all tests. You can both read and write YAML files.
 
-**Test Coverage:** 102/102 tests passing (100%) - Zero memory leaks
+**Test Coverage:** 109/109 tests passing (100%) - Zero memory leaks
 
-### Test Breakdown:
-- scanner_test.zig: 15 passed
-- value_test.zig: 9 passed
-- parser_test.zig: 11 passed
-- api_test.zig: 12 passed
-- spec_examples.zig: 4 passed
-- text_inputs.zig: 13 passed
-- stringify_test.zig: 16 passed ✨ *Serialization tests with Writer API*
-- yaml-test: 22 passed
+### YAML Test Suite Compliance
+
+This library is tested against the [official YAML Test Suite](https://github.com/yaml/yaml-test-suite), which contains hundreds of test cases covering YAML 1.2.2 specification compliance.
+
+**Current Results:** 259/435 tests passing (59.5%)
+
+The test suite is integrated into the CI/CD pipeline and runs on every commit and pull request.
 
 ## Features
 
