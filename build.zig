@@ -59,4 +59,29 @@ pub fn build(b: *std.Build) void {
         const run_t = b.addRunArtifact(t);
         test_step.dependOn(&run_t.step);
     }
+
+    // YAML Test Suite runner executable
+    const test_suite_exe = b.addExecutable(.{
+        .name = "yaml-test-suite",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("test/yaml_test_suite.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "yaml", .module = yaml_mod },
+            },
+        }),
+    });
+
+    const test_suite_install = b.addInstallArtifact(test_suite_exe, .{});
+    b.getInstallStep().dependOn(&test_suite_install.step);
+
+    // Step to run the test suite (requires yaml-test-suite directory)
+    const run_test_suite = b.addRunArtifact(test_suite_exe);
+    if (b.args) |args| {
+        run_test_suite.addArgs(args);
+    }
+
+    const test_suite_step = b.step("test-suite", "Run official YAML test suite");
+    test_suite_step.dependOn(&run_test_suite.step);
 }

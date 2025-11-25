@@ -55,7 +55,7 @@ The YAML parser and serializer are both fully functional and pass all tests. You
 Add to your `build.zig.zon`:
 
 ```bash
-zig fetch --save "git+https://github.com/inge4pres/yaml.zig#v0.1.0"
+zig fetch --save "git+https://github.com/inge4pres/yaml.zig#v0.1.1"
 ```
 
 In your `build.zig`:

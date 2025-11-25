@@ -1,0 +1,139 @@
+name: YAML Test Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-suite:
+    name: Run Official YAML Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v2
+      with:
+        version: 0.15.2
+        mirror: https://zigmirror.com
+
+    - name: Build library and tests
+      run: zig build
+
+    - name: Run standard tests
+      run: zig build test
+
+    - name: Build YAML test suite runner
+      run: zig build
+
+    - name: Run YAML Test Suite
+      id: test_suite
+      continue-on-error: true
+      run: |
+        echo "## YAML Test Suite Results" >> $GITHUB_STEP_SUMMARY
+        ./zig-out/bin/yaml-test-suite test/suite | tee test_results.txt
+
+        # Add results to step summary
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat test_results.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+        # Create detailed failed tests report
+        if grep -q "❌" test_results.txt; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Failed Tests Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test ID | Error |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          grep "❌" test_results.txt | while IFS=: read -r marker rest; do
+            TEST_ID=$(echo "$marker" | sed 's/❌ //')
+            ERROR=$(echo "$rest" | sed 's/^ *//')
+            if [ -z "$ERROR" ]; then
+              ERROR="Parse error"
+            fi
+            echo "| \`$TEST_ID\` | $ERROR |" >> $GITHUB_STEP_SUMMARY
+          done
+        fi
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: yaml-test-suite-results
+        path: test_results.txt
+        retention-days: 30
+
+    - name: Check test results
+      run: |
+        if [ -f test_results.txt ]; then
+          # Check if there were any failures
+          if grep -q "❌ Failed:" test_results.txt; then
+            FAILED=$(grep "❌ Failed:" test_results.txt | awk '{print $3}')
+            if [ "$FAILED" != "0" ]; then
+              echo "::error::YAML Test Suite had $FAILED failing tests"
+              exit 1
+            fi
+          fi
+
+          # Ensure we have results
+          if ! grep -q "Total:" test_results.txt; then
+            echo "::error::No test results found"
+            exit 1
+          fi
+        else
+          echo "::error::Test results file not found"
+          exit 1
+        fi
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const fs = require('fs');
+
+          let testResults = '';
+          try {
+            testResults = fs.readFileSync('test_results.txt', 'utf8');
+          } catch (error) {
+            testResults = 'Failed to read test results';
+          }
+
+          const body = `## YAML Test Suite Results\n\n\`\`\`\n${testResults}\n\`\`\``;
+
+          // Find existing comment
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const botComment = comments.data.find(comment =>
+            comment.user.type === 'Bot' &&
+            comment.body.includes('YAML Test Suite Results')
+          );
+
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }
