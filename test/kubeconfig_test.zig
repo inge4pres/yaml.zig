@@ -2,33 +2,6 @@ const std = @import("std");
 const testing = std.testing;
 const yaml = @import("yaml");
 
-test "parse kubeconfig file" {
-    const allocator = testing.allocator;
-
-    // Read the actual kubeconfig file
-    const file = try std.fs.openFileAbsolute("/home/francesco/.kube/config", .{});
-    defer file.close();
-
-    const content = try file.readToEndAlloc(allocator, 1024 * 1024); // 1MB max
-    defer allocator.free(content);
-
-    var parsed = try yaml.parseFromSlice(allocator, content);
-    defer parsed.deinit();
-
-    // The root should be a mapping
-    const root_map = parsed.value.asMapping();
-    try testing.expect(root_map != null);
-
-    // Check if current-context exists
-    const current_context = root_map.?.get("current-context");
-    try testing.expect(current_context != null);
-
-    // If we get here, verify it's the expected value
-    const context_str = current_context.?.asString();
-    try testing.expect(context_str != null);
-    try testing.expectEqualStrings("hotel", context_str.?);
-}
-
 test "parse minimal kubeconfig structure" {
     const allocator = testing.allocator;
 
