@@ -78,9 +78,7 @@ pub fn build(b: *std.Build) void {
 
     // Step to run the test suite (requires yaml-test-suite directory)
     const run_test_suite = b.addRunArtifact(test_suite_exe);
-    if (b.args) |args| {
-        run_test_suite.addArgs(args);
-    }
+    run_test_suite.addPassthruArgs();
 
     const test_suite_step = b.step("test-suite", "Run official YAML test suite");
     test_suite_step.dependOn(&run_test_suite.step);

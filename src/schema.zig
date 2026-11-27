@@ -163,7 +163,7 @@ fn parseBool(value: []const u8) !Value {
 
 fn parseInt(value: []const u8) !Value {
     // Remove underscores
-    var cleaned = std.ArrayList(u8){};
+    var cleaned = std.ArrayList(u8).empty;
     defer cleaned.deinit(std.heap.page_allocator);
 
     for (value) |c| {
@@ -216,7 +216,7 @@ fn parseFloat(value: []const u8) !Value {
     }
 
     // Remove underscores
-    var cleaned = std.ArrayList(u8){};
+    var cleaned = std.ArrayList(u8).empty;
     defer cleaned.deinit(std.heap.page_allocator);
 
     for (value) |c| {
