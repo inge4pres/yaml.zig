@@ -105,7 +105,7 @@ test "stringify: strings that need quoting" {
 }
 
 test "stringify: empty sequence" {
-    var seq = Value.Sequence{};
+    var seq = Value.Sequence.empty;
     defer seq.deinit(testing.allocator);
 
     const value = Value{ .sequence = seq };
@@ -117,7 +117,7 @@ test "stringify: empty sequence" {
 }
 
 test "stringify: simple sequence" {
-    var seq = Value.Sequence{};
+    var seq = Value.Sequence.empty;
     try seq.append(testing.allocator, Value{ .int = 1 });
     try seq.append(testing.allocator, Value{ .int = 2 });
     try seq.append(testing.allocator, Value{ .int = 3 });
@@ -136,7 +136,7 @@ test "stringify: simple sequence" {
 
 test "stringify: sequence with strings" {
     const allocator = testing.allocator;
-    var seq = Value.Sequence{};
+    var seq = Value.Sequence.empty;
 
     const str1 = try allocator.dupe(u8, "apple");
     const str2 = try allocator.dupe(u8, "banana");
@@ -284,7 +284,7 @@ test "stringify: serializeToWriterWithOptions" {
     const allocator = testing.allocator;
 
     // Create a simple sequence
-    var seq = Value.Sequence{};
+    var seq = Value.Sequence.empty;
     try seq.append(allocator, Value{ .int = 1 });
     try seq.append(allocator, Value{ .int = 2 });
     try seq.append(allocator, Value{ .int = 3 });
@@ -298,7 +298,7 @@ test "stringify: serializeToWriterWithOptions" {
 
     // Use custom options
     const options = yaml.StringifyOptions{
-        .indent_size = 4,  // Use 4 spaces instead of 2
+        .indent_size = 4, // Use 4 spaces instead of 2
     };
 
     try yaml.serializeToWriterWithOptions(value, writer, options);

@@ -160,7 +160,7 @@ const Writer = struct {
         }
 
         // Block style - collect and sort keys for deterministic output
-        var keys = std.ArrayList([]const u8){};
+        var keys = std.ArrayList([]const u8).empty;
         defer keys.deinit(std.heap.page_allocator);
 
         var iter = map.iterator();
@@ -207,7 +207,7 @@ const Writer = struct {
         try self.writer.writeAll("{");
 
         // Collect and sort keys
-        var keys = std.ArrayList([]const u8){};
+        var keys = std.ArrayList([]const u8).empty;
         defer keys.deinit(std.heap.page_allocator);
 
         var iter = map.iterator();

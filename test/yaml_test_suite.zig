@@ -7,13 +7,11 @@ const TestResult = struct {
     error_msg: ?[]const u8,
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    const args = try init.minimal.args.toSlice(allocator);
+    defer allocator.free(args);
 
     if (args.len < 2) {
         std.debug.print("Usage: {s} <yaml-test-suite-directory>\n", .{args[0]});
@@ -22,7 +20,8 @@ pub fn main() !void {
 
     const test_suite_dir = args[1];
 
-    var results = std.ArrayList(TestResult){};
+    var results = std.ArrayList(TestResult).empty;
+    defer results.deinit(allocator);
     defer {
         for (results.items) |result| {
             allocator.free(result.name);
@@ -33,7 +32,7 @@ pub fn main() !void {
         results.deinit(allocator);
     }
 
-    try runTestSuite(allocator, test_suite_dir, &results);
+    try runTestSuite(init.io, allocator, test_suite_dir, &results);
 
     // Print summary
     try printSummary(results.items);
@@ -49,22 +48,22 @@ pub fn main() !void {
     }
 }
 
-fn runTestSuite(allocator: std.mem.Allocator, suite_dir: []const u8, results: *std.ArrayList(TestResult)) !void {
-    var dir = try std.fs.cwd().openDir(suite_dir, .{ .iterate = true });
-    defer dir.close();
+fn runTestSuite(io: std.Io, allocator: std.mem.Allocator, suite_dir: []const u8, results: *std.ArrayList(TestResult)) !void {
+    var dir = try std.Io.Dir.cwd().openDir(io, suite_dir, .{ .iterate = true });
+    defer dir.close(io);
 
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .directory) continue;
 
         // Each test case is in a directory with a specific ID
         const test_id = entry.name;
-        try runSingleTest(allocator, dir, test_id, results);
+        try runSingleTest(io, allocator, dir, test_id, results);
     }
 }
 
-fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
-    var test_dir = suite_dir.openDir(test_id, .{ .iterate = true }) catch |err| {
+fn runSingleTest(io: std.Io, allocator: std.mem.Allocator, suite_dir: std.Io.Dir, test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
+    var test_dir = suite_dir.openDir(io, test_id, .{ .iterate = true }) catch |err| {
         const error_msg = try std.fmt.allocPrint(allocator, "Failed to open test directory: {}", .{err});
         try results.append(allocator, .{
             .name = try allocator.dupe(u8, test_id),
@@ -73,18 +72,18 @@ fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: [
         });
         return;
     };
-    defer test_dir.close();
+    defer test_dir.close(io);
 
     // Check if this is a multi-test directory (has numeric subdirectories)
     // by trying to access in.yaml - if it doesn't exist, it's a parent directory
-    test_dir.access("in.yaml", .{}) catch {
+    test_dir.access(io, "in.yaml", .{}) catch {
         // This is a parent directory with subdirectories like 00, 01, 02
         // Run each subtest
         var subdir_iter = test_dir.iterate();
-        while (try subdir_iter.next()) |entry| {
+        while (try subdir_iter.next(io)) |entry| {
             if (entry.kind != .directory) continue;
             const subtest_id = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ test_id, entry.name });
-            try runSubTest(allocator, test_dir, entry.name, subtest_id, results);
+            try runSubTest(io, allocator, test_dir, entry.name, subtest_id, results);
         }
         return;
     };
@@ -92,13 +91,13 @@ fn runSingleTest(allocator: std.mem.Allocator, suite_dir: std.fs.Dir, test_id: [
     // Single test case
     std.debug.print("Testing: {s}... ", .{test_id});
     const owned_test_id = try allocator.dupe(u8, test_id);
-    try runTestCase(allocator, test_dir, owned_test_id, results);
+    try runTestCase(io, allocator, test_dir, owned_test_id, results);
 }
 
-fn runSubTest(allocator: std.mem.Allocator, parent_dir: std.fs.Dir, subdir_name: []const u8, full_test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
+fn runSubTest(io: std.Io, allocator: std.mem.Allocator, parent_dir: std.Io.Dir, subdir_name: []const u8, full_test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
     std.debug.print("Testing: {s}... ", .{full_test_id});
 
-    var test_dir = parent_dir.openDir(subdir_name, .{}) catch |err| {
+    var test_dir = parent_dir.openDir(io, subdir_name, .{}) catch |err| {
         const error_msg = try std.fmt.allocPrint(allocator, "Failed to open subtest directory: {}", .{err});
         try results.append(allocator, .{
             .name = try allocator.dupe(u8, full_test_id),
@@ -108,25 +107,25 @@ fn runSubTest(allocator: std.mem.Allocator, parent_dir: std.fs.Dir, subdir_name:
         std.debug.print("❌ (open failed)\n", .{});
         return;
     };
-    defer test_dir.close();
+    defer test_dir.close(io);
 
     // full_test_id is already allocated by the caller, pass it directly
-    try runTestCase(allocator, test_dir, full_test_id, results);
+    try runTestCase(io, allocator, test_dir, full_test_id, results);
 }
 
-fn runTestCase(allocator: std.mem.Allocator, test_dir: std.fs.Dir, test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
+fn runTestCase(io: std.Io, allocator: std.mem.Allocator, test_dir: std.Io.Dir, test_id: []const u8, results: *std.ArrayList(TestResult)) !void {
     // Read test metadata from '====' file if it exists
     const in_yaml_path = "in.yaml";
     const error_path = "error";
 
     // Check if this test expects an error
     const expects_error = blk: {
-        test_dir.access(error_path, .{}) catch break :blk false;
+        test_dir.access(io, error_path, .{}) catch break :blk false;
         break :blk true;
     };
 
     // Try to read the input YAML
-    const yaml_content = test_dir.readFileAlloc(allocator, in_yaml_path, 1024 * 1024) catch |err| {
+    const yaml_content = test_dir.readFileAlloc(io, in_yaml_path, allocator, std.Io.Limit.limited(1024 * 1024)) catch |err| {
         if (expects_error) {
             // If we expect an error and can't read the file, that might be intentional
             try results.append(allocator, .{

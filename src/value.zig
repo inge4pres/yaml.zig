@@ -106,7 +106,7 @@ pub const Value = union(enum) {
 
     pub fn initSequence(allocator: Allocator) Value {
         _ = allocator;
-        return .{ .sequence = Sequence{} };
+        return .{ .sequence = Sequence.empty };
     }
 
     pub fn initMapping(allocator: Allocator) Value {
@@ -122,7 +122,7 @@ pub const Value = union(enum) {
             .float => |f| .{ .float = f },
             .string => |s| .{ .string = try allocator.dupe(u8, s) },
             .sequence => |seq| {
-                var new_seq = Sequence{};
+                var new_seq = Sequence.empty;
                 try new_seq.ensureTotalCapacity(allocator, seq.items.len);
                 for (seq.items) |item| {
                     try new_seq.append(allocator, try item.deepCopy(allocator));
